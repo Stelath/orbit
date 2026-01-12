@@ -18,14 +18,11 @@ struct SettingsView: View {
     @State private var baseURL: String = ""
     @State private var selectedModel: String = ""
     @State private var showKey: Bool = false
-    @State private var isExpanded: Bool = false
+    @State private var isExpanded: Bool = true
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
-                headerSection
-
                 // Single provider configuration section
                 providerConfigurationSection
 
@@ -53,20 +50,6 @@ struct SettingsView: View {
             }
         }
         .animation(.easeInOut, value: viewModel.showingSaveConfirmation)
-    }
-
-    // MARK: - Header Section
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("AI Provider Settings", systemImage: "gearshape")
-                .font(.title)
-                .fontWeight(.bold)
-
-            Text("Configure API keys and models for AI providers")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Provider Configuration Section

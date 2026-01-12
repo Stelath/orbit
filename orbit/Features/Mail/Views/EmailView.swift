@@ -13,14 +13,49 @@ struct EmailView: View {
     @Query private var accounts: [GoogleAccount]
     @Query private var downloadedEmails: [DownloadedEmail]
     @State private var viewModel = EmailManagementViewModel()
-    @State private var showingSpamFilter = false
+    @State private var selectedTab: EmailTab = .general
+    @State private var selectedFilteringAccountEmail: String = ""
+    @State private var enabledFoldersByAccount: [String: Set<String>] = [:]
 
     var body: some View {
+        VStack(spacing: 16) {
+            Picker("Email View", selection: $selectedTab) {
+                ForEach(EmailTab.allCases, id: \.self) { tab in
+                    Text(tab.title).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if selectedTab == .general {
+                generalContent
+            } else {
+                emailFilteringContent
+            }
+        }
+        .padding()
+        .onAppear {
+            viewModel.calculateStorageUsed(context: modelContext)
+            ensureFilteringAccountSelection()
+        }
+        .onChange(of: accounts) { _, _ in
+            ensureFilteringAccountSelection()
+        }
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+            }
+        }
+    }
+
+    // MARK: - General Tab
+
+    private var generalContent: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
-                headerSection
-
                 // Connected accounts status
                 accountsStatusSection
 
@@ -32,50 +67,70 @@ struct EmailView: View {
 
                 // Storage management
                 storageSection
-
-                // Spam filtering
-                spamFilterSection
-            }
-            .padding()
-        }
-        .onAppear {
-            viewModel.calculateStorageUsed(context: modelContext)
-        }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button("OK") {
-                viewModel.errorMessage = nil
-            }
-        } message: {
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-            }
-        }
-        .sheet(isPresented: $showingSpamFilter) {
-            NavigationStack {
-                SpamFilterView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                showingSpamFilter = false
-                            }
-                        }
-                    }
             }
         }
     }
 
-    // MARK: - Header Section
+    // MARK: - Email Filtering Tab
 
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Email Management", systemImage: "envelope")
-                .font(.title)
-                .fontWeight(.bold)
+    private var emailFilteringContent: some View {
+        VStack(spacing: 16) {
+            if accounts.isEmpty {
+                Text("Connect a Google account to configure filtering.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                GroupBox {
+                    if availableFolderTree.isEmpty {
+                        Text("Download emails to see available folders.")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List {
+                            OutlineGroup(availableFolderTree, children: \.childrenOptional) { node in
+                                Toggle(isOn: bindingForFolder(node.fullPath)) {
+                                    Label {
+                                        Text(node.displayName)
+                                    } icon: {
+                                        Image(systemName: folderIconName(for: node))
+                                    }
+                                }
+                            }
+                        }
+                        .listStyle(.inset)
+                    }
+                } label: {
+                    Text("Email Folders")
+                        .font(.headline)
+                }
 
-            Text("Download and manage your emails locally")
-                .foregroundStyle(.secondary)
+                GroupBox {
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        HStack(spacing: 12) {
+                            ForEach(accounts, id: \.email) { account in
+                                Button {
+                                    selectedFilteringAccountEmail = account.email
+                                } label: {
+                                    Text(account.formattedDisplayName)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(selectedFilteringAccountEmail == account.email ? Color.accentColor.opacity(0.2) : Color.clear)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } label: {
+                    Text("Accounts")
+                        .font(.headline)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Accounts Status Section
@@ -273,34 +328,160 @@ struct EmailView: View {
 
     // MARK: - Spam Filter Section
 
-    private var spamFilterSection: some View {
-        GroupBox {
-            VStack(spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Spam Filtering")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+    // MARK: - Filtering Helpers
 
-                        Text("Manage spam filter rules")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        showingSpamFilter = true
-                    } label: {
-                        Label("Manage Rules", systemImage: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        } label: {
-            Text("Spam Filtering")
-                .font(.headline)
+    private var availableFolderTree: [FolderNode] {
+        guard !selectedFilteringAccountEmail.isEmpty else {
+            return []
         }
+
+        let labels = downloadedEmails
+            .filter { $0.googleAccountEmail == selectedFilteringAccountEmail }
+            .flatMap { $0.labels }
+
+        var allLabels = Set(labels)
+        defaultFolderOrder.forEach { allLabels.insert($0) }
+        return FolderNode.buildTree(from: Array(allLabels))
+    }
+
+    private var defaultFolderOrder: [String] {
+        [
+            "INBOX",
+            "IMPORTANT",
+            "STARRED",
+            "SENT",
+            "DRAFT",
+            "ARCHIVE",
+            "SPAM",
+            "TRASH"
+        ]
+    }
+
+    private func ensureFilteringAccountSelection() {
+        if selectedFilteringAccountEmail.isEmpty {
+            selectedFilteringAccountEmail = accounts.first?.email ?? ""
+        } else if !accounts.contains(where: { $0.email == selectedFilteringAccountEmail }) {
+            selectedFilteringAccountEmail = accounts.first?.email ?? ""
+        }
+    }
+
+    private func bindingForFolder(_ folder: String) -> Binding<Bool> {
+        Binding(
+            get: {
+                enabledFoldersByAccount[selectedFilteringAccountEmail, default: []].contains(folder)
+            },
+            set: { isEnabled in
+                var folders = enabledFoldersByAccount[selectedFilteringAccountEmail, default: []]
+                if isEnabled {
+                    folders.insert(folder)
+                } else {
+                    folders.remove(folder)
+                }
+                enabledFoldersByAccount[selectedFilteringAccountEmail] = folders
+            }
+        )
+    }
+
+    private func folderIconName(for node: FolderNode) -> String {
+        switch node.fullPath.uppercased() {
+        case "INBOX": return "tray"
+        case "IMPORTANT": return "flag"
+        case "STARRED": return "star"
+        case "SENT": return "paperplane"
+        case "DRAFT": return "pencil"
+        case "ARCHIVE": return "archivebox"
+        case "SPAM": return "exclamationmark.triangle"
+        case "TRASH": return "trash"
+        default:
+            return node.children.isEmpty ? "folder" : "folder.fill"
+        }
+    }
+}
+
+private enum EmailTab: String, CaseIterable {
+    case general
+    case filtering
+
+    var title: String {
+        switch self {
+        case .general:
+            return "General"
+        case .filtering:
+            return "Email Filtering"
+        }
+    }
+}
+
+private struct FolderNode: Identifiable {
+    let id: String
+    let name: String
+    let fullPath: String
+    let children: [FolderNode]
+    var childrenOptional: [FolderNode]? { children.isEmpty ? nil : children }
+
+    var displayName: String {
+        switch name.uppercased() {
+        case "INBOX": return "Inbox"
+        case "IMPORTANT": return "Important"
+        case "STARRED": return "Starred"
+        case "SENT": return "Sent"
+        case "DRAFT": return "Drafts"
+        case "ARCHIVE": return "Archive"
+        case "SPAM": return "Spam"
+        case "TRASH": return "Trash"
+        default:
+            return name.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    static func buildTree(from labels: [String]) -> [FolderNode] {
+        var root: [String: FolderBuilder] = [:]
+
+        for label in labels {
+            let components = label.split(separator: "/").map(String.init)
+            guard let first = components.first else { continue }
+            if root[first] == nil {
+                root[first] = FolderBuilder(name: first)
+            }
+            root[first]?.insert(path: Array(components.dropFirst()))
+        }
+
+        return root.values
+            .map { $0.build(parentPath: nil) }
+            .sorted { lhs, rhs in
+                if lhs.name == rhs.name { return false }
+                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+    }
+}
+
+private struct FolderBuilder {
+    let name: String
+    var children: [String: FolderBuilder] = [:]
+
+    mutating func insert(path: [String]) {
+        guard let next = path.first else { return }
+        if children[next] == nil {
+            children[next] = FolderBuilder(name: next)
+        }
+        children[next]?.insert(path: Array(path.dropFirst()))
+    }
+
+    func build(parentPath: String?) -> FolderNode {
+        let fullPath: String
+        if let parentPath, !parentPath.isEmpty {
+            fullPath = "\(parentPath)/\(name)"
+        } else {
+            fullPath = name
+        }
+
+        let childNodes = children.values.map { $0.build(parentPath: fullPath) }
+        return FolderNode(
+            id: fullPath,
+            name: name,
+            fullPath: fullPath,
+            children: childNodes.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        )
     }
 }
 

@@ -34,22 +34,9 @@
 		02923CAA2F11C70500E2304D /* orbitUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = orbitUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		02AE49922F155E7200855143 /* Exceptions for "orbit" folder in "orbit" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 02923C902F11C70200E2304D /* orbit */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		02923C932F11C70200E2304D /* orbit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				02AE49922F155E7200855143 /* Exceptions for "orbit" folder in "orbit" target */,
-			);
 			path = orbit;
 			sourceTree = "<group>";
 		};
@@ -437,6 +424,8 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = orbit/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -470,6 +459,8 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = orbit/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

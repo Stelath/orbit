@@ -12,7 +12,15 @@ import SwiftData
 struct orbitApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            // Settings Models
+            AIProviderSettings.self,
+            // Accounts Models
+            GoogleAccount.self,
+            // Email Models
+            DownloadedEmail.self,
+            SpamFilterRule.self,
+            // Calendar Models
+            CalendarEvent.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
